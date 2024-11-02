@@ -1,3 +1,8 @@
+# Fork information
+
+Because detecting X window not working in Xwayland
+This fork just use dbus to detect typing language and prevent keys processes to Minecraft
+
 # Fcitx5-Enhancer
 
 This is a mod made for Minecraft, which provides compatibility with Fcitx5.
