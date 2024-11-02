@@ -1,74 +1,40 @@
-#include <cstring>
+#include <sdbus-c++/sdbus-c++.h>
 #include <iostream>
-#include <X11/Xlib.h>
 #include "cn_xiaym_fcitx5_Fcitx5.h"
 
-auto const display = XOpenDisplay(nullptr);
-auto const rootWindow = DefaultRootWindow(display);
-
-Window rootRet, parentRet;
-Window *childList = nullptr;
-unsigned int childNum = 0;
-
-Window fcitx5Win = -1;
-
-// X11 Error Handling
-XErrorHandler oldHandler = nullptr;
-bool errorOccurred = false;
-int customHandler(Display *, XErrorEvent *) {
-    errorOccurred = true;
-    return 0;
+std::unique_ptr<sdbus::IConnection> connection;
+std::unique_ptr<sdbus::IProxy> proxy;
+std::string interface_name = "org.fcitx.Fcitx.Controller1";
+std::string method_name = "CurrentInputMethod";
+std::string service_name = "org.fcitx.Fcitx5";
+std::string object_path = "/controller";
+std::string call_dbus_method() {
+    try {
+        std::string output;
+        proxy->callMethod(method_name).onInterface(interface_name).storeResultsTo(output);
+        return output;
+    } catch (const sdbus::Error& e) {
+        return "";
+    }
 }
 
-bool findFcitx5Win() {
-    XQueryTree(display, rootWindow, &rootRet, &parentRet, &childList, &childNum);
-
-    for (unsigned int i = 0; i < childNum; ++i) {
-        char *buffer = nullptr;
-        XFetchName(display, childList[i], &buffer);
-
-        if (buffer && strcmp(buffer, "Fcitx5 Input Window") == 0) {
-            // Found!
-            fcitx5Win = childList[i];
-
-            XFree(buffer);
-            return true;
-        }
-
-        XFree(buffer);
+bool initConnection() {
+    try {
+        connection = sdbus::createSessionBusConnection();
+        proxy = sdbus::createProxy(*connection, sdbus::ServiceName(service_name), sdbus::ObjectPath(object_path));
+        return true;
+    } catch (const sdbus::Error& e) {
+        return false;
     }
-
-    return false;
 }
 
 extern "C" {
-JNIEXPORT jboolean JNICALL Java_cn_xiaym_fcitx5_Fcitx5_findWindow(JNIEnv *, jclass) {
-    return findFcitx5Win();
-}
-
-JNIEXPORT jboolean JNICALL Java_cn_xiaym_fcitx5_Fcitx5_userTyping(JNIEnv *, jclass) {
-    XWindowAttributes attr;
-    for (unsigned int i = 0; i < 2; i++) {
-        oldHandler = XSetErrorHandler(customHandler);
-        XGetWindowAttributes(display, fcitx5Win, &attr);
-        XSetErrorHandler(oldHandler);
-
-        if (!errorOccurred) {
-            break;
-        }
-
-        errorOccurred = false;
-
-        if (!findFcitx5Win() /* Fcitx5 was killed */ || i == 1) {
-            return false;
-        }
+    JNIEXPORT jboolean JNICALL Java_cn_xiaym_fcitx5_Fcitx5_findWindow(JNIEnv *, jclass) {
+        return initConnection();
     }
 
-    // The status indicator should be ignored
-    if (attr.width < 75) {
-        return false;
+    JNIEXPORT jboolean JNICALL Java_cn_xiaym_fcitx5_Fcitx5_userTyping(JNIEnv *, jclass) {
+        std::string result = call_dbus_method();
+        return result != "keyboard-us";
     }
-
-    return attr.map_state == 2;
-}
 }

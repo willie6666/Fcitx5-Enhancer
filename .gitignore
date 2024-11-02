@@ -5,3 +5,7 @@ build/
 out/
 
 /run/
+
+src/native/cmake-build-debug
+src/native/.idea
+src/native/build
